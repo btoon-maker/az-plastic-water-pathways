@@ -1,0 +1,956 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Plastic Pathways AZ — From Litter to Ocean</title>
+
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <style>
+    :root{
+      --bg0:#070b14;
+      --bg1:#0b1220;
+      --panel:#0f1a2e;
+      --panel2:#101f38;
+      --text:#e9eefc;
+      --muted:#a9b7dd;
+      --border:rgba(255,255,255,.10);
+
+      --accent:#66b3ff;
+      --ok:#7ee787;
+      --warn:#f7c843;
+      --bad:#ff7b72;
+
+      --river:#57c7ff;
+      --drain:#9aa7c7;
+      --land:#7ee787;
+      --ocean:#6aa9ff;
+      --trash:#ff7b72;
+      --intercept:#f7c843;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background:linear-gradient(180deg,var(--bg0) 0%, var(--bg1) 40%, var(--bg0) 100%);
+      color:var(--text);
+    }
+    header{
+      padding:16px 18px 10px;
+      border-bottom:1px solid var(--border);
+      background:rgba(0,0,0,.25);
+      position:sticky; top:0; z-index:10;
+      backdrop-filter: blur(10px);
+    }
+    header h1{ margin:0 0 6px; font-size:18px; letter-spacing:.2px; }
+    header p{ margin:0; color:var(--muted); font-size:13px; line-height:1.35; }
+
+    .wrap{
+      display:grid;
+      grid-template-columns: minmax(420px, 560px) 1fr;
+      gap:12px;
+      padding:12px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .wrap{ grid-template-columns: 1fr; }
+    }
+
+    .panel{
+      background:linear-gradient(180deg,var(--panel) 0%, var(--panel2) 100%);
+      border:1px solid var(--border);
+      border-radius:14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      overflow:hidden;
+    }
+    .panel .hd{
+      padding:12px 12px 10px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .panel .hd h2{
+      margin:0;
+      font-size:14px;
+      letter-spacing:.2px;
+    }
+    .panel .bd{ padding:12px; }
+
+    .pill{
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      padding:7px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(0,0,0,.18);
+      font-size:12px;
+      color:var(--muted);
+      user-select:none;
+    }
+    .dot{ width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.35); display:inline-block;}
+    .dot.ok{ background:var(--ok); }
+    .dot.warn{ background:var(--warn); }
+    .dot.bad{ background:var(--bad); }
+
+    label{ display:block; font-size:12px; color:var(--muted); margin:0 0 6px; }
+    select, button, input[type="range"]{
+      width:100%;
+      background:rgba(255,255,255,.06);
+      border:1px solid var(--border);
+      color:var(--text);
+      padding:9px 10px;
+      border-radius:10px;
+      outline:none;
+    }
+    button{
+      cursor:pointer;
+      background:rgba(102,179,255,.15);
+      border:1px solid rgba(102,179,255,.35);
+      font-weight:700;
+    }
+    button:hover{ filter:brightness(1.08); }
+    input[type="range"]{ padding:0; height:34px; }
+
+    .row{ display:flex; gap:10px; flex-wrap:wrap; }
+    .row > *{ flex:1 1 auto; }
+
+    .cards{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap:10px;
+      margin-top:8px;
+    }
+    .card{
+      border:1px solid var(--border);
+      background:rgba(0,0,0,.18);
+      border-radius:14px;
+      padding:10px;
+      cursor:pointer;
+      transition:.12s transform, .12s filter;
+      user-select:none;
+    }
+    .card:hover{ transform: translateY(-1px); filter:brightness(1.06); }
+    .card.selected{
+      border-color: rgba(102,179,255,.60);
+      box-shadow: 0 0 0 2px rgba(102,179,255,.15) inset;
+    }
+    .card .t{ font-weight:800; font-size:13px; margin-bottom:4px; }
+    .card .d{ font-size:12px; color:var(--muted); line-height:1.35; }
+    .badge{
+      display:inline-flex;
+      padding:3px 8px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.05);
+      color:var(--muted);
+      font-size:11px;
+      margin-top:8px;
+      gap:6px;
+      align-items:center;
+    }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+    .kvs{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top:10px;
+    }
+    .kv{
+      padding:10px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:rgba(0,0,0,.18);
+    }
+    .kv .k{ font-size:11px; color:var(--muted); margin-bottom:6px; }
+    .kv .v{ font-size:14px; font-weight:800; }
+
+    #map{
+      width:100%;
+      height: 520px;
+      border-radius:14px;
+      overflow:hidden;
+    }
+    @media (max-width: 980px){
+      #map{ height: 420px; }
+    }
+
+    .viz{
+      margin-top:12px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      overflow:hidden;
+      background:rgba(0,0,0,.12);
+    }
+    .vizHd{
+      padding:10px 12px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+    }
+    .vizHd .title{ font-weight:900; font-size:13px; }
+    .vizHd .sub{ color:var(--muted); font-size:12px; }
+    .vizBd{ padding:10px 12px 12px; }
+
+    .flowSvg{
+      width:100%;
+      height:220px;
+      display:block;
+    }
+
+    .barRow{
+      display:grid;
+      grid-template-columns: 120px 1fr 64px;
+      gap:10px;
+      align-items:center;
+      margin:10px 0;
+      font-size:12px;
+    }
+    .bar{
+      height:12px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.06);
+      overflow:hidden;
+    }
+    .bar > span{
+      display:block;
+      height:100%;
+      width:0%;
+      border-radius:999px;
+    }
+    .note{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.45;
+      margin-top:10px;
+    }
+
+    .split{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    @media (max-width: 980px){
+      .split{ grid-template-columns:1fr; }
+    }
+
+    .ghostBtn{
+      background:rgba(255,255,255,.06);
+      border:1px solid var(--border);
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <h1>Plastic Pathways AZ — From Litter to Ocean</h1>
+  <p>
+    Click a starting point on the map. Choose an item + conditions. Then run a simulation to see how litter can move through a <b>storm-drain system</b>,
+    into <b>washes and rivers</b>, and toward the <b>Gulf of California</b>. Your job: choose the best intervention and justify it with evidence.
+  </p>
+</header>
+
+<div class="wrap">
+  <!-- LEFT: Simulator -->
+  <section class="panel">
+    <div class="hd">
+      <h2>Decision Studio: Source → Pathway → Outcome</h2>
+      <span class="pill"><span id="statusDot" class="dot ok"></span><span id="statusText">Ready</span></span>
+    </div>
+
+    <div class="bd">
+      <div class="kvs">
+        <div class="kv">
+          <div class="k">Starting location</div>
+          <div class="v mono" id="startText">Click the map</div>
+        </div>
+        <div class="kv">
+          <div class="k">Watershed path (model)</div>
+          <div class="v" id="pathText">—</div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <label>Choose a plastic item (tap one)</label>
+        <div class="cards" id="itemCards"></div>
+      </div>
+
+      <hr style="border:0;border-top:1px solid var(--border);margin:12px 0">
+
+      <div class="row">
+        <div>
+          <label for="rain">Weather condition</label>
+          <select id="rain">
+            <option value="dry">Dry week (low runoff)</option>
+            <option value="normal" selected>Normal conditions</option>
+            <option value="storm">Rainstorm (high runoff)</option>
+          </select>
+        </div>
+        <div>
+          <label for="binAccess">Bin access nearby</label>
+          <select id="binAccess">
+            <option value="high" selected>High (easy to throw away)</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low (few bins / overflowing)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <div>
+          <label for="streetSweep">Street sweeping / cleanup</label>
+          <select id="streetSweep">
+            <option value="strong">Strong (frequent)</option>
+            <option value="medium" selected>Medium</option>
+            <option value="weak">Weak (rare)</option>
+          </select>
+        </div>
+        <div>
+          <label for="stormGrates">Storm drain protection</label>
+          <select id="stormGrates">
+            <option value="none" selected>None</option>
+            <option value="some">Some (a few devices)</option>
+            <option value="many">Many (wide use)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <div>
+          <label for="people">People behavior (littering pressure)</label>
+          <input type="range" id="people" min="0" max="100" step="1" value="45" />
+          <div class="note" style="margin-top:6px;">Littering pressure: <b><span id="peopleVal">45</span></b>/100</div>
+        </div>
+      </div>
+
+      <div class="split" style="margin-top:12px;">
+        <button id="runBtn">Run simulation</button>
+        <button id="compareBtn" class="ghostBtn">Save as Scenario A / B</button>
+      </div>
+
+      <div class="viz">
+        <div class="vizHd">
+          <div>
+            <div class="title">Pathway Animation</div>
+            <div class="sub">Watch a “plastic particle” move through the system</div>
+          </div>
+          <span class="pill"><span class="dot warn"></span><span id="runMeta">No run yet</span></span>
+        </div>
+
+        <div class="vizBd">
+          <svg class="flowSvg" viewBox="0 0 900 220" aria-label="Plastic pathway diagram">
+            <!-- Nodes -->
+            <defs>
+              <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+            </defs>
+
+            <!-- Links -->
+            <path id="p1" d="M90,110 C200,40 300,40 410,110" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="10" stroke-linecap="round"/>
+            <path id="p2" d="M410,110 C520,180 630,180 740,110" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="10" stroke-linecap="round"/>
+            <path id="p3" d="M410,110 C520,40 630,40 740,110" fill="none" stroke="rgba(255,255,255,.16)" stroke-width="10" stroke-linecap="round" stroke-dasharray="10 10"/>
+
+            <!-- Nodes -->
+            <g>
+              <circle cx="90" cy="110" r="34" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.18)" stroke-width="2"/>
+              <text x="90" y="114" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="800">Street</text>
+              <text x="90" y="132" text-anchor="middle" fill="var(--muted)" font-size="11">litter</text>
+            </g>
+
+            <g>
+              <circle cx="410" cy="110" r="34" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.18)" stroke-width="2"/>
+              <text x="410" y="114" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="800">Drain</text>
+              <text x="410" y="132" text-anchor="middle" fill="var(--muted)" font-size="11">runoff</text>
+            </g>
+
+            <g>
+              <circle cx="740" cy="110" r="34" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.18)" stroke-width="2"/>
+              <text x="740" y="114" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="800">Wash</text>
+              <text x="740" y="132" text-anchor="middle" fill="var(--muted)" font-size="11">river</text>
+            </g>
+
+            <g>
+              <circle cx="860" cy="110" r="26" fill="rgba(106,169,255,.12)" stroke="rgba(106,169,255,.55)" stroke-width="2"/>
+              <text x="860" y="114" text-anchor="middle" fill="var(--text)" font-size="12" font-weight="900">Gulf</text>
+              <text x="860" y="132" text-anchor="middle" fill="var(--muted)" font-size="10">ocean</text>
+            </g>
+
+            <!-- Particle -->
+            <circle id="particle" cx="90" cy="110" r="10" fill="var(--trash)" filter="url(#glow)" opacity="0"/>
+          </svg>
+
+          <div class="note" style="margin-top:8px;">
+            This is a simplified classroom model of pathways in the Phoenix area (storm drains → washes → Salt/Gila river system → toward the Gulf of California).
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="barRow">
+              <div><b>Intercepted</b></div>
+              <div class="bar"><span id="bIntercept" style="background:var(--intercept)"></span></div>
+              <div class="mono" id="tIntercept">—</div>
+            </div>
+
+            <div class="barRow">
+              <div><b>Stays local</b></div>
+              <div class="bar"><span id="bLocal" style="background:var(--river)"></span></div>
+              <div class="mono" id="tLocal">—</div>
+            </div>
+
+            <div class="barRow">
+              <div><b>Reaches ocean</b></div>
+              <div class="bar"><span id="bOcean" style="background:var(--ocean)"></span></div>
+              <div class="mono" id="tOcean">—</div>
+            </div>
+
+            <div class="barRow">
+              <div><b>Landfilled</b></div>
+              <div class="bar"><span id="bLandfill" style="background:var(--land)"></span></div>
+              <div class="mono" id="tLandfill">—</div>
+            </div>
+          </div>
+
+          <button id="copyClaim" style="margin-top:10px;">Copy a data-informed claim</button>
+          <div class="note" id="claimHint"></div>
+        </div>
+      </div>
+
+      <div class="note">
+        <b>Teacher note:</b> This tool is designed for “studios” — students test decisions, observe outcomes, and write an evidence-based claim.
+        It’s not a forecast and doesn’t track personal data.
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: Map -->
+  <section class="panel">
+    <div class="hd">
+      <h2>Arizona Local Map (Click a source point)</h2>
+      <span class="pill"><span class="dot ok"></span><span>Map-based source → system simulation</span></span>
+    </div>
+    <div class="bd">
+      <div id="map"></div>
+      <div class="note">
+        Tip: Click near high-traffic areas (stadiums, malls, freeways) and then compare the impact of storm-drain protection vs cleanup vs bin access.
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  /**********************
+   * Core idea:
+   *  - Not a time-series explorer
+   *  - A pathway simulator: source → drain → wash → (local retention OR ocean-bound) with interception options
+   **********************/
+
+  // Phoenix center (approx)
+  const PHX = { lat: 33.4484, lon: -112.0740 };
+
+  // Map bounds (keep “Arizona-local” and student-relevant)
+  const AZ_BOUNDS = L.latLngBounds(
+    L.latLng(33.0, -112.9),   // SW
+    L.latLng(33.9, -111.7)    // NE
+  );
+
+  // UI elements
+  const statusDot = document.getElementById("statusDot");
+  const statusText = document.getElementById("statusText");
+  const startText = document.getElementById("startText");
+  const pathText = document.getElementById("pathText");
+
+  const rain = document.getElementById("rain");
+  const binAccess = document.getElementById("binAccess");
+  const streetSweep = document.getElementById("streetSweep");
+  const stormGrates = document.getElementById("stormGrates");
+  const people = document.getElementById("people");
+  const peopleVal = document.getElementById("peopleVal");
+
+  const runBtn = document.getElementById("runBtn");
+  const compareBtn = document.getElementById("compareBtn");
+  const runMeta = document.getElementById("runMeta");
+
+  const particle = document.getElementById("particle");
+
+  const bIntercept = document.getElementById("bIntercept");
+  const bLocal = document.getElementById("bLocal");
+  const bOcean = document.getElementById("bOcean");
+  const bLandfill = document.getElementById("bLandfill");
+
+  const tIntercept = document.getElementById("tIntercept");
+  const tLocal = document.getElementById("tLocal");
+  const tOcean = document.getElementById("tOcean");
+  const tLandfill = document.getElementById("tLandfill");
+
+  const copyClaim = document.getElementById("copyClaim");
+  const claimHint = document.getElementById("claimHint");
+
+  // Item definitions (weights drive probabilities)
+  const ITEMS = [
+    {
+      id:"cap",
+      title:"Bottle cap",
+      desc:"Small, durable. Easy to slip through grates and travel far during storms.",
+      tags:["small", "durable"],
+      // model weights
+      float: 0.55,     // relative buoyancy / persistence in flow
+      snag: 0.10,      // gets stuck in vegetation/trash piles
+      interceptable: 0.55 // likely to be caught by drain devices
+    },
+    {
+      id:"bag",
+      title:"Plastic bag/film",
+      desc:"Lightweight film. Can snag on plants and fences but also moves easily in wind/runoff.",
+      tags:["film", "wind"],
+      float: 0.65,
+      snag: 0.35,
+      interceptable: 0.45
+    },
+    {
+      id:"wrapper",
+      title:"Food wrapper",
+      desc:"Common litter type. Moderate travel distance; can break down into fragments.",
+      tags:["common", "fragments"],
+      float: 0.60,
+      snag: 0.22,
+      interceptable: 0.50
+    },
+    {
+      id:"line",
+      title:"Fishing line / cord",
+      desc:"Strong and harmful to wildlife. Often snags locally but persists for a long time.",
+      tags:["entanglement", "persistent"],
+      float: 0.35,
+      snag: 0.55,
+      interceptable: 0.35
+    }
+  ];
+
+  // Build item cards
+  const itemCardsWrap = document.getElementById("itemCards");
+  let selectedItem = ITEMS[0].id;
+
+  function renderItemCards(){
+    itemCardsWrap.innerHTML = "";
+    for(const it of ITEMS){
+      const div = document.createElement("div");
+      div.className = "card" + (it.id === selectedItem ? " selected" : "");
+      div.innerHTML = `
+        <div class="t">${it.title}</div>
+        <div class="d">${it.desc}</div>
+        <div class="badge"><span class="dot ok"></span>${it.tags.join(" • ")}</div>
+      `;
+      div.addEventListener("click", ()=>{
+        selectedItem = it.id;
+        renderItemCards();
+      });
+      itemCardsWrap.appendChild(div);
+    }
+  }
+  renderItemCards();
+
+  // Map
+  const map = L.map("map", { zoomControl:true }).setView([PHX.lat, PHX.lon], 10);
+  map.setMaxBounds(AZ_BOUNDS);
+  map.fitBounds(AZ_BOUNDS.pad(-0.05));
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+
+  let startMarker = null;
+  let startLatLon = null;
+
+  function setStatus(kind, text){
+    statusText.textContent = text;
+    statusDot.className = "dot";
+    if(kind === "ok") statusDot.classList.add("ok");
+    if(kind === "warn") statusDot.classList.add("warn");
+    if(kind === "bad") statusDot.classList.add("bad");
+  }
+
+  function clamp(n, lo, hi){ return Math.max(lo, Math.min(hi, n)); }
+
+  // Simple “watershed label” (student-friendly; not engineering-grade)
+  function inferPathLabel(lat, lon){
+    // Rough split: west valley → Gila; central/east → Salt; north-ish → washes
+    if(lon < -112.35) return "West Valley → Gila River system → toward Colorado River → Gulf of California";
+    if(lat > 33.65) return "North Valley washes → Salt River system → Gila → toward Gulf of California";
+    return "Phoenix metro drains → Salt River system → Gila → toward Gulf of California";
+  }
+
+  map.on("click", (e)=>{
+    const lat = e.latlng.lat;
+    const lon = e.latlng.lng;
+
+    startLatLon = { lat, lon };
+
+    if(startMarker) map.removeLayer(startMarker);
+    startMarker = L.circleMarker([lat, lon], {
+      radius: 7, weight: 2, color: "#ffffff", fillColor:"#ffffff", fillOpacity: 0.18
+    }).addTo(map);
+
+    startText.textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    pathText.textContent = inferPathLabel(lat, lon);
+
+    claimHint.textContent = "";
+    setStatus("ok","Start point set");
+  });
+
+  // Range value
+  people.addEventListener("input", ()=>{
+    peopleVal.textContent = people.value;
+  });
+
+  // Scenario compare storage
+  let scenarioA = null;
+  let scenarioB = null;
+  let compareToggle = 0; // 0->A, 1->B
+
+  compareBtn.addEventListener("click", ()=>{
+    const s = getScenario();
+    if(compareToggle === 0){
+      scenarioA = s;
+      compareToggle = 1;
+      setStatus("ok","Saved Scenario A (next save will be B)");
+      compareBtn.textContent = "Save as Scenario B";
+    }else{
+      scenarioB = s;
+      compareToggle = 0;
+      setStatus("ok","Saved Scenario B (now you can compare A vs B)");
+      compareBtn.textContent = "Saved A & B (click to overwrite A)";
+      // show quick compare hint
+      claimHint.textContent = "Saved A and B. Run simulation to generate outcomes, then compare by changing one variable at a time.";
+    }
+  });
+
+  function getScenario(){
+    return {
+      itemId: selectedItem,
+      rain: rain.value,
+      binAccess: binAccess.value,
+      streetSweep: streetSweep.value,
+      stormGrates: stormGrates.value,
+      people: Number(people.value),
+      start: startLatLon ? { ...startLatLon } : null
+    };
+  }
+
+  // Deterministic RNG (so students can re-run same scenario and see stable results)
+  function mulberry32(seed){
+    return function(){
+      let t = seed += 0x6D2B79F5;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+  }
+  function hashScenario(s){
+    // simple hash from strings + numbers
+    const str = JSON.stringify(s);
+    let h = 2166136261;
+    for(let i=0;i<str.length;i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  // Core model:
+  // We compute probabilities for:
+  //  - Landfilled (proper disposal / pickup)
+  //  - Intercepted (street sweeping / drain devices)
+  //  - Stays local (snags in vegetation / wash deposition)
+  //  - Reaches ocean (ocean-bound pathway, simplified)
+  //
+  // These are NOT “true values” — they are a classroom systems model with
+  // tunable factors that respond to student decisions.
+  function simulate(s){
+    const item = ITEMS.find(x=>x.id===s.itemId);
+    if(!item) throw new Error("Unknown item");
+
+    // 0..1 drivers
+    const rainF =
+      s.rain === "dry" ? 0.15 :
+      s.rain === "normal" ? 0.45 : 0.85;
+
+    const binsF =
+      s.binAccess === "high" ? 0.80 :
+      s.binAccess === "medium" ? 0.50 : 0.25;
+
+    const sweepF =
+      s.streetSweep === "strong" ? 0.75 :
+      s.streetSweep === "medium" ? 0.45 : 0.20;
+
+    const grateF =
+      s.stormGrates === "none" ? 0.00 :
+      s.stormGrates === "some" ? 0.35 : 0.70;
+
+    const peopleF = clamp(s.people / 100, 0, 1); // “pressure”
+
+    // START: probability it becomes litter in the first place
+    // Higher people pressure → more litter.
+    // Higher bins → less litter.
+    const pLitter = clamp(0.15 + (peopleF * 0.65) - (binsF * 0.35), 0.05, 0.95);
+
+    // If not litter, it is effectively landfilled (properly disposed)
+    let pLandfill = clamp(1 - pLitter, 0.02, 0.95);
+
+    // Of litter: interception by sweeping BEFORE drain
+    // Sweeping matters more in dry/normal than storm
+    const sweepEffect = sweepF * (1 - rainF * 0.55);
+    let pInterceptStreet = clamp(pLitter * sweepEffect * 0.55, 0, pLitter);
+
+    // Remaining litter after street interception
+    let remaining = pLitter - pInterceptStreet;
+
+    // Drain capture devices (storm grates)
+    // More rain increases movement into drains (and makes devices more relevant)
+    const drainIn = clamp(rainF * 0.85 + item.float * 0.15, 0.05, 0.95);
+    const pEnterDrain = remaining * drainIn;
+
+    // Of those entering drain, some are intercepted by devices
+    const pInterceptDrain = clamp(pEnterDrain * grateF * item.interceptable * 0.80, 0, pEnterDrain);
+
+    // Remaining that exits to wash/river
+    const toWash = pEnterDrain - pInterceptDrain;
+
+    // Local snag/deposition increases with item snag, decreases with high flow
+    const snagBase = item.snag;
+    const pLocal = clamp(toWash * (snagBase * 0.85 + (1 - rainF) * 0.25), 0, toWash);
+
+    // Ocean-bound fraction: increases with rain and float; decreases with snag
+    const pOcean = clamp((toWash - pLocal) * (rainF * 0.70 + item.float * 0.35) * (1 - snagBase * 0.45), 0, (toWash - pLocal));
+
+    // Anything else ends up “local” (settles, breaks down, gets trapped in system)
+    const pLocal2 = (toWash - pLocal - pOcean);
+    const pLocalTotal = clamp(pLocal + pLocal2, 0, 1);
+
+    const pInterceptTotal = clamp(pInterceptStreet + pInterceptDrain, 0, 1);
+
+    // Normalize to 1 (small rounding errors)
+    let sum = pLandfill + pInterceptTotal + pLocalTotal + pOcean;
+    if(sum <= 0) sum = 1;
+
+    const out = {
+      landfill: pLandfill / sum,
+      intercepted: pInterceptTotal / sum,
+      local: pLocalTotal / sum,
+      ocean: pOcean / sum
+    };
+
+    // Build a narrative “dominant factor”
+    const factor = explainDriver({rainF,binsF,sweepF,grateF,peopleF,item});
+    out.explain = factor;
+
+    return out;
+  }
+
+  function explainDriver(ctx){
+    // Decide which lever most changed “ocean-bound” risk in the story.
+    // This is a qualitative explanation for students.
+    const {rainF,binsF,sweepF,grateF,peopleF,item} = ctx;
+    const drivers = [
+      {k:"Rain/runoff", v: rainF * 1.2},
+      {k:"Bin access", v: (1 - binsF) * 0.9},
+      {k:"Storm-drain protection", v: (1 - grateF) * item.interceptable * 1.0},
+      {k:"Street sweeping", v: (1 - sweepF) * 0.7},
+      {k:"Littering pressure", v: peopleF * 0.8}
+    ];
+    drivers.sort((a,b)=>b.v-a.v);
+    return drivers[0].k;
+  }
+
+  // Animation: move particle along path segments based on whether it reaches ocean
+  function animatePath(reachesOcean){
+    particle.setAttribute("opacity","1");
+    particle.setAttribute("fill","var(--trash)");
+
+    const start = {x:90,y:110};
+    const drain = {x:410,y:110};
+    const wash  = {x:740,y:110};
+    const gulf  = {x:860,y:110};
+
+    const points = reachesOcean
+      ? [start, drain, wash, gulf]
+      : [start, drain, wash]; // stops locally
+
+    let i = 0;
+    const durationPerLeg = 520; // ms
+    const steps = 42;
+
+    function lerp(a,b,t){ return a + (b-a)*t; }
+
+    function runLeg(){
+      if(i >= points.length-1){
+        // fade out
+        setTimeout(()=>particle.setAttribute("opacity","0"), 650);
+        return;
+      }
+      const A = points[i];
+      const B = points[i+1];
+      let s = 0;
+
+      const timer = setInterval(()=>{
+        s++;
+        const t = s/steps;
+        particle.setAttribute("cx", lerp(A.x,B.x,t));
+        particle.setAttribute("cy", lerp(A.y,B.y,t));
+        if(s>=steps){
+          clearInterval(timer);
+          i++;
+          runLeg();
+        }
+      }, durationPerLeg/steps);
+    }
+    // reset
+    particle.setAttribute("cx", start.x);
+    particle.setAttribute("cy", start.y);
+    runLeg();
+  }
+
+  function pct(n){ return Math.round(n*100); }
+  function setBars(out){
+    bIntercept.style.width = `${pct(out.intercepted)}%`;
+    bLocal.style.width = `${pct(out.local)}%`;
+    bOcean.style.width = `${pct(out.ocean)}%`;
+    bLandfill.style.width = `${pct(out.landfill)}%`;
+
+    tIntercept.textContent = `${pct(out.intercepted)}%`;
+    tLocal.textContent = `${pct(out.local)}%`;
+    tOcean.textContent = `${pct(out.ocean)}%`;
+    tLandfill.textContent = `${pct(out.landfill)}%`;
+  }
+
+  function buildClaim(s, out){
+    const item = ITEMS.find(x=>x.id===s.itemId)?.title || s.itemId;
+    const coord = s.start ? `${s.start.lat.toFixed(4)}, ${s.start.lon.toFixed(4)}` : "unknown location";
+
+    return `Claim (Plastic Pathways — Arizona Local):
+Starting at ${coord}, a ${item} under ${s.rain} conditions with bin access=${s.binAccess}, street sweeping=${s.streetSweep}, and storm-drain protection=${s.stormGrates} has an estimated:
+• ${pct(out.ocean)}% chance of reaching the Gulf/ocean-bound pathway,
+• ${pct(out.local)}% chance of staying local (snagged/deposited),
+• ${pct(out.intercepted)}% chance of being intercepted (cleanup/drain devices),
+• ${pct(out.landfill)}% chance of being properly disposed (landfilled).
+
+Most influential factor in this run: ${out.explain}.
+Decision: The best intervention to reduce ocean-bound risk is __________ because the data show __________.`;
+  }
+
+  runBtn.addEventListener("click", ()=>{
+    const s = getScenario();
+    if(!s.start){
+      setStatus("bad","Click a start point on the map first");
+      return;
+    }
+
+    setStatus("warn","Running simulation…");
+
+    // deterministic per scenario
+    const rng = mulberry32(hashScenario(s));
+    // Run multiple trials for stable probabilities (still deterministic)
+    const trials = 200;
+    let sum = {landfill:0, intercepted:0, local:0, ocean:0};
+    let explainCount = {};
+    for(let k=0;k<trials;k++){
+      // tiny deterministic jitter so it doesn’t feel “fake”
+      const jitter = (rng()-0.5) * 0.04;
+
+      const baseOut = simulate(s);
+      // apply tiny jitter by redistributing a little from local ↔ ocean
+      let ocean = clamp(baseOut.ocean + jitter, 0, 1);
+      let local = clamp(baseOut.local - jitter, 0, 1);
+
+      // re-normalize keeping landfill/intercepted fixed
+      const fixed = baseOut.landfill + baseOut.intercepted;
+      const rem = 1 - fixed;
+      const remSum = ocean + local;
+      if(remSum > 0){
+        ocean = (ocean/remSum) * rem;
+        local = (local/remSum) * rem;
+      }else{
+        ocean = rem*0.5; local = rem*0.5;
+      }
+
+      sum.landfill += baseOut.landfill;
+      sum.intercepted += baseOut.intercepted;
+      sum.local += local;
+      sum.ocean += ocean;
+
+      explainCount[baseOut.explain] = (explainCount[baseOut.explain] || 0) + 1;
+    }
+
+    const out = {
+      landfill: sum.landfill / trials,
+      intercepted: sum.intercepted / trials,
+      local: sum.local / trials,
+      ocean: sum.ocean / trials,
+      explain: Object.entries(explainCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || "—"
+    };
+
+    setBars(out);
+
+    // Animate based on most likely outcome (ocean vs local)
+    animatePath(out.ocean >= out.local);
+
+    // Meta
+    const itemName = ITEMS.find(x=>x.id===s.itemId)?.title || s.itemId;
+    runMeta.textContent = `${itemName} • ${s.rain} • ocean ${pct(out.ocean)}%`;
+
+    // Claim hint
+    claimHint.textContent = `Most influential factor here appears to be: ${out.explain}. Try changing only ONE variable and re-run to test your hypothesis.`;
+
+    // Store last run for copy
+    window.__lastScenario = s;
+    window.__lastOut = out;
+
+    setStatus("ok","Updated");
+  });
+
+  copyClaim.addEventListener("click", async ()=>{
+    const s = window.__lastScenario;
+    const out = window.__lastOut;
+    if(!s || !out){
+      setStatus("warn","Run a simulation first");
+      return;
+    }
+    const text = buildClaim(s, out);
+    try{
+      await navigator.clipboard.writeText(text);
+      setStatus("ok","Claim copied!");
+      setTimeout(()=>setStatus("ok","Ready"), 1200);
+    }catch{
+      console.log(text);
+      alert("Copy failed. The claim was printed to the console.");
+    }
+  });
+
+  // Init
+  peopleVal.textContent = people.value;
+  setStatus("ok","Ready");
+</script>
+</body>
+</html>
